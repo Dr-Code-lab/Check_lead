@@ -1,6 +1,9 @@
 import string
 import re
+import pandas as pd
 from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import CountVectorizer
 from emot import core
 import contractions
 
@@ -58,21 +61,39 @@ def drop_over_spaces(text):
     return re.sub(r"\s{2,}", ' ', text)
 
 
-def cleaning_data(df_data):
+def cleaning_data(df_data, msg_column):
     """Function fix contractions"""
-    df_data['message'] = df_data['message'].apply(lambda x: contractions.fix(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: contractions.fix(x))
     emot_core = core.emot()
-    df_data['message'] = df_data['message'].apply(lambda x: emoticon_transform(x, emot_core))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: emoticon_transform(x, emot_core))
     ru_stopwords = stopwords.words('russian')
-    df_data['message'] = df_data['message'].apply(lambda x: drop_stopwords(x, ru_stopwords))
-    df_data['message'] = df_data['message'].apply(lambda x: drop_hashtags_and_mentions(x))
-    df_data['message'] = df_data['message'].apply(lambda x: drop_url(x))
-    df_data['message'] = df_data['message'].apply(lambda x: drop_ticks_and_nextone(x))
-    df_data['message'] = df_data['message'].apply(lambda x: drop_numbers(x))
-    df_data['message'] = df_data['message'].apply(lambda x: drop_punctuations(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_stopwords(x, ru_stopwords))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_hashtags_and_mentions(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_url(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_ticks_and_nextone(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_numbers(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_punctuations(x))
     """Function is converting Dataframe to lower case"""
-    df_data['message'] = df_data['message'].apply(lambda x: x.lower())
-    df_data['message'] = df_data['message'].apply(lambda x: drop_over_spaces(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: x.lower())
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_over_spaces(x))
     """Function is makeing Dataframe with unique rows"""
-    df_data.drop_duplicates(subset='message')
+    df_data.drop_duplicates(subset=msg_column)
     return df_data
+
+
+def tokenization(message):
+    """Just tokenize text - split text to text units"""
+    return word_tokenize(message)
+
+
+def vectorize(df_for_vectorizing, corpus_column, index_column):
+    """Function make vectors from text"""
+    corpus = df_for_vectorizing[corpus_column].apply(lambda row: ' '.join(row))
+    index_s = df_for_vectorizing[index_column]
+
+    bow_vectorizer = CountVectorizer()
+    bow_matrix = bow_vectorizer.fit_transform(corpus).toarray()
+    bag_of_words = pd.DataFrame(data=bow_matrix,
+                                index=index_s,
+                                columns=bow_vectorizer.get_feature_names_out())
+    return bag_of_words
