@@ -3,7 +3,10 @@ import re
 import pandas as pd
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from emot import core
 import contractions
 
@@ -86,8 +89,30 @@ def tokenization(message):
     return word_tokenize(message)
 
 
-def vectorize(df_for_vectorizing, corpus_column, index_column):
-    """Function make vectors from text"""
+def stemming(message):
+    stemmer = PorterStemmer()
+    text = message.split()
+    stem_lst = list()
+    for word in text:
+        stem = stemmer.stem(word)
+        stem_lst.append(stem)
+    return ' '.join(stem_lst)
+
+
+def lemmatization(message):
+    lemmatizer = WordNetLemmatizer()
+    text = message.split()
+    lemm_lst = list()
+    for word in text:
+        lemm = lemmatizer.lemmatize(word)
+        lemm_lst.append(lemm)
+    return ' '.join(lemm_lst)
+
+
+def vectorize_bow(df_for_vectorizing, corpus_column, index_column):
+    """Word count: Bag-of-Words
+    — это статистический анализ, анализирующий количественное вхождение слов в документах."""
+
     corpus = df_for_vectorizing[corpus_column].apply(lambda row: ' '.join(row))
     index_s = df_for_vectorizing[index_column]
 
@@ -97,3 +122,25 @@ def vectorize(df_for_vectorizing, corpus_column, index_column):
                                 index=index_s,
                                 columns=bow_vectorizer.get_feature_names_out())
     return bag_of_words
+
+
+def vectorize_tf_idf(df_for_vectorizing, corpus_column, index_column):
+    """TF-IDF
+    (от англ. TF — term frequency, IDF — inverse document frequency) — статистическая мера,
+    используемая для оценки важности слова в контексте документа, являющегося частью коллекции документов или корпуса.
+    Вес некоторого слова пропорционален частоте употребления этого слова в документе
+    и обратно пропорционален частоте употребления слова во всех документах коллекции."""
+
+    corpus = df_for_vectorizing[corpus_column].apply(lambda row: ' '.join(row))
+    index_s = df_for_vectorizing[index_column]
+
+    tf_idf_vectorizer = TfidfVectorizer()
+    tf_idf_matrix = tf_idf_vectorizer.fit_transform(corpus).todense()
+    tf_idf = pd.DataFrame(data=tf_idf_matrix,
+                          index = index_s,
+                          columns = tf_idf_vectorizer.get_feature_names_out())
+
+    return tf_idf
+
+
+#%%
