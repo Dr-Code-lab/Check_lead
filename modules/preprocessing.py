@@ -7,19 +7,11 @@ from nltk.stem import PorterStemmer
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from emot import core
 import contractions
 
 
-def emoticon_transform(text, emot_core):
-    """Function replace emoticons with text"""
-    emoticons = emot_core.emoticons(text).get('value')
-    means = emot_core.emoticons(text).get('mean')
-    if emoticons:
-        for i, emoticon in enumerate(emoticons):
-            text = text.replace(emoticon, ' ' + means[i] + ' ')
-    return text
-
+def spell_checker(message):
+    pass
 
 def drop_stopwords(text, lst_stopwords):
     """Function is cleaning Dataframe from english stopwords"""
@@ -33,8 +25,8 @@ def drop_stopwords(text, lst_stopwords):
 
 def drop_hashtags_and_mentions(text):
     """Function is cleaning Dataframe from hashtags and mentions"""
-    clean_text = re.sub("@[A-Za-z0-9_]+", "", text)  # replace mention with empty string
-    clean_text = re.sub("#[a-zA-Z0-9_]+", "", clean_text)  # replace hashtag with empty string
+    clean_text = re.sub("@[А-Яа-яA-Za-z0-9_]+", "", text)  # replace mention with empty string
+    clean_text = re.sub("#[А-Яа-яa-zA-Z0-9_]+", "", clean_text)  # replace hashtag with empty string
     return clean_text
 
 
@@ -56,6 +48,7 @@ def drop_numbers(text):
 
 def drop_punctuations(text):
     """Function is cleaning Dataframe from punctuations"""
+    text = text.replace('”', ' ').replace('“', ' ').replace('«', ' ').replace('»', ' ')
     return re.sub('[%s]' % re.escape(string.punctuation), ' ', text)
 
 
@@ -64,18 +57,23 @@ def drop_over_spaces(text):
     return re.sub(r"\s{2,}", ' ', text)
 
 
+def get_stopwords():
+    my_file = open("data/stopwords-ru.txt", "r")
+    data = my_file.read()
+    stopwords = data.split("\n")
+    return stopwords
+
+
 def cleaning_data(df_data, msg_column):
     """Function fix contractions"""
     df_data[msg_column] = df_data[msg_column].apply(lambda x: contractions.fix(x))
-    emot_core = core.emot()
-    df_data[msg_column] = df_data[msg_column].apply(lambda x: emoticon_transform(x, emot_core))
-    ru_stopwords = stopwords.words('russian')
-    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_stopwords(x, ru_stopwords))
     df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_hashtags_and_mentions(x))
     df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_url(x))
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_punctuations(x))
+    ru_stopwords = stopwords.words('russian') #get_stopwords()
+    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_stopwords(x, ru_stopwords))
     df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_ticks_and_nextone(x))
     df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_numbers(x))
-    df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_punctuations(x))
     """Function is converting Dataframe to lower case"""
     df_data[msg_column] = df_data[msg_column].apply(lambda x: x.lower())
     df_data[msg_column] = df_data[msg_column].apply(lambda x: drop_over_spaces(x))
@@ -84,34 +82,33 @@ def cleaning_data(df_data, msg_column):
     return df_data
 
 
+
 def tokenization(message):
     """Just tokenize text - split text to text units"""
     return word_tokenize(message)
 
 
-def stemming(message):
+def stemming(message_tokens):
     stemmer = PorterStemmer()
-    text = message.split()
     stem_lst = list()
-    for word in text:
+    for word in message_tokens:
         stem = stemmer.stem(word)
         stem_lst.append(stem)
-    return ' '.join(stem_lst)
+    return stem_lst
 
 
-def lemmatization(message):
+def lemmatization(message_tokens):
     lemmatizer = WordNetLemmatizer()
-    text = message.split()
     lemm_lst = list()
-    for word in text:
+    for word in message_tokens:
         lemm = lemmatizer.lemmatize(word)
         lemm_lst.append(lemm)
-    return ' '.join(lemm_lst)
+    return lemm_lst
 
 
 def vectorize_bow(df_for_vectorizing, corpus_column, index_column):
-    """Word count: Bag-of-Words
-    — это статистический анализ, анализирующий количественное вхождение слов в документах."""
+    """Word count: Bag-of-Words — это статистический анализ,
+    анализирующий количественное вхождение слов в документах."""
 
     corpus = df_for_vectorizing[corpus_column].apply(lambda row: ' '.join(row))
     index_s = df_for_vectorizing[index_column]
@@ -143,4 +140,17 @@ def vectorize_tf_idf(df_for_vectorizing, corpus_column, index_column):
     return tf_idf
 
 
+def doc2vec_model(df_data):
+    from gensim.test.utils import common_texts
+    from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+
+    documents = [TaggedDocument(doc, [i]) for i, doc in enumerate(common_texts)]
+
+    """First training Doc2Vec model"""
+    d2v_model = Doc2Vec(documents, window=2, min_count=1, workers=4, epochs=12)
+    return d2v_model
+
+
+def doc2vec_vectorize(target_message_tokens, message_list, model):
+    return model.infer_vector(target_message_tokens), [model.infer_vector(msg) for msg in message_list]
 #%%
